@@ -1,16 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Transactions;
-using CSharpFunctionalExtensions;
 using Devart.Data.Oracle;
 using HibernatingRhinos.Profiler.Appender.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
-namespace devart_efcore_3_discriminator_bug
+namespace devart_efcore_3_value_conversion_bug
 {
     public class Program
     {
@@ -44,9 +42,9 @@ CREATE TABLE BEAST_RIDER
 (
     ID          NUMBER (19, 0) GENERATED ALWAYS AS IDENTITY NOT NULL,
     RIDER_NAME        VARCHAR2 (50 CHAR) NOT NULL,
-    BEAST_NAME        VARCHAR2 (50 CHAR)
+    BEAST_TYPE        VARCHAR2 (50 CHAR) NOT NULL
 )");
-                        context.Database.ExecuteSqlRaw(@"INSERT INTO BEAST_RIDER (RIDER_NAME) VALUES ('Khal Drogo')");
+                        context.Database.ExecuteSqlRaw(@"INSERT INTO BEAST_RIDER (RIDER_NAME, BEAST_TYPE) VALUES ('Khal Drogo', 'Unicorn')");
 
                         await context.SaveChangesAsync();
                     }
@@ -56,16 +54,13 @@ CREATE TABLE BEAST_RIDER
 
                 await using (var context = new EntityContext())
                 {
-                    // This works
-                    var khalDrogo = await context.Set<BeastRider>()
-                        .FirstOrDefaultAsync(_ => _.Beast != null && _.Beast.Name == "Khal drogo");
-
-                    // This fails with 'System.InvalidOperationException: Null TypeMapping in Sql Tree'
-                    var khals = await context.Set<BeastRider>()
-                        .Where(_ => _.Beast != null && _.Beast.Name.StartsWith("Khal"))
+                    // Throws System.InvalidOperationException:
+                    // No coercion operator is defined between types 'System.String' and 'devart_efcore_3_value_conversion_bug.EquineBeast'.
+                    var unicornRiders = await context.Set<BeastRider>()
+                        .Where(_ => _.Beast == EquineBeast.Unicorn)
                         .ToArrayAsync();
 
-                    Console.WriteLine($"Found {khals.Length} khals.");
+                    Console.WriteLine($"Found {unicornRiders.Length} unicorn riders.");
                 }
 
                 Console.WriteLine("Finished.");
@@ -108,11 +103,14 @@ CREATE TABLE BEAST_RIDER
             modelBuilder.Entity<BeastRider>().HasKey(_ => _.Id);
             modelBuilder.Entity<BeastRider>().Property(_ => _.Id).HasColumnName("ID");
             modelBuilder.Entity<BeastRider>().Property(_ => _.RiderName).HasColumnName("RIDER_NAME");
-            modelBuilder.Entity<BeastRider>().OwnsOne(_ => _.Beast,
-                ba =>
-                {
-                    ba.Property(beast => beast.Name).HasColumnName("BEAST_NAME");
-                });
+            modelBuilder.Entity<BeastRider>().Property(_ => _.Beast).HasColumnName("BEAST_TYPE");
+
+            // Does not work
+            modelBuilder.Entity<BeastRider>().Property(_ => _.Beast).HasConversion<string>();
+
+            // Works
+            //var converter = new EnumToStringConverter<EquineBeast>();
+            //modelBuilder.Entity<BeastRider>().Property(_ => _.Beast).HasConversion(converter);
         }
     }
 
@@ -122,35 +120,25 @@ CREATE TABLE BEAST_RIDER
 
         public string RiderName { get; private set; }
 
-        public Beast? Beast { get; private set; }
-
-        // ReSharper disable once UnusedMember.Global
-#pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
+        public EquineBeast Beast { get; private set; }
+        
         public BeastRider()
-#pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
         {
             // Required by EF Core
         }
 
-        public BeastRider(string riderName, Beast beast)
+        public BeastRider(string riderName, EquineBeast beast)
         {
             RiderName = riderName;
             Beast = beast;
         }
     }
 
-    public class Beast : ValueObject
+    public enum EquineBeast
     {
-        public string Name { get; private set; }
-
-        public Beast(string name)
-        {
-            Name = name;
-        }
-
-        protected override IEnumerable<object> GetEqualityComponents()
-        {
-            yield return Name;
-        }
+        Donkey,
+        Mule,
+        Horse,
+        Unicorn
     }
 }

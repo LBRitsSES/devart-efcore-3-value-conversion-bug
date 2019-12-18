@@ -3,9 +3,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.0</TargetFramework>
-    <RootNamespace>devart-efcore-3-owned-type-bug</RootNamespace>
+    <RootNamespace>devart-efcore-3-value-conversion-bug</RootNamespace>
     <LangVersion>8.0</LangVersion>
-    <AssemblyName>devart-efcore-3-owned-type-bug</AssemblyName>
+    <AssemblyName>devart-efcore-3-value-conversion-bug</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
